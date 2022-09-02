@@ -734,7 +734,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
 
     # group_objects: group text object to textlines.
     def group_objects(
-        self, laparams: LAParams, objs: Iterable[LTComponent], line_list: Optional[list[list[Tuple[float]]]] = None
+        self, laparams: LAParams, objs: Iterable[LTComponent], line_list: Optional[list[list[float]]] = None
     ) -> Iterator[LTTextLine]:
         obj0 = None
         line = None
@@ -791,8 +791,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 objs_min_y, objs_max_y = min([obj0.y0, obj0.y1, obj1.y0, obj1.y1]), max([obj0.y0, obj0.y1, obj1.y0, obj1.y1])
 
                 for pt_of_line in line_list:
-                    line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
-                    line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
+                    line_min_x, line_max_x, line_min_y, line_max_y = pt_of_line[:4]
                     # When objects are placed side by side and there is the line between them.
                     if objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
                         separate_by_line = True
@@ -957,7 +956,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         # By now only groups are in the plane
         return list(cast(LTTextGroup, g) for g in plane)
 
-    def extract_lines(self) -> list[list[Tuple[float]]]:
+    def extract_lines(self) -> list[list[float]]:
         """For separationg textline with LTChar by LTline, LTRect.
         This function is added by kash.
         """
@@ -978,7 +977,12 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 line_list.append([obj.pts[-1], obj.pts[0]])
             else:
                 assert False, f"type is invalid. type: {type(obj)}"
-        return line_list
+        result_line_list = []
+        for pt_of_line in line_list:
+            line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
+            line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
+            result_line_list.append([line_min_x, line_max_x, line_min_y, line_max_y])
+        return result_line_list
         
     def analyze(self, laparams: LAParams, lines: Optional[list] = None) -> None:
         """
