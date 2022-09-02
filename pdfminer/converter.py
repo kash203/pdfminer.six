@@ -76,7 +76,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         assert not self._stack, str(len(self._stack))
         assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
         if self.laparams is not None:
-            self.cur_item.analyze(self.laparams)
+            line_list = self.cur_item.extract_lines()  # added by kash.
+            self.cur_item.analyze(self.laparams, line_list)
         self.pageno += 1
         self.receive_layout(self.cur_item)
 

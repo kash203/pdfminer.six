@@ -734,10 +734,11 @@ class LTLayoutContainer(LTContainer[LTComponent]):
 
     # group_objects: group text object to textlines.
     def group_objects(
-        self, laparams: LAParams, objs: Iterable[LTComponent]
+        self, laparams: LAParams, objs: Iterable[LTComponent], line_list: Optional[list[list[Tuple[float]]]] = None
     ) -> Iterator[LTTextLine]:
         obj0 = None
         line = None
+        separate_by_line = False  # added by kash.
         for obj1 in objs:
             if obj0 is not None:
                 # halign: obj0 and obj1 is horizontally aligned.
@@ -782,8 +783,25 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                     and obj0.vdistance(obj1)
                     < max(obj0.height, obj1.height) * laparams.char_margin
                 )
+                
+                # Added by kash ===============================================================
+                # If there are lines between two object areas, objects is regarded as separated.
+                # Note: this processing effect to speed. about x2.5 slower...
+                objs_min_x, objs_max_x = min([obj0.x0, obj0.x1, obj1.x0, obj1.x1]), max([obj0.x0, obj0.x1, obj1.x0, obj1.x1])
+                objs_min_y, objs_max_y = min([obj0.y0, obj0.y1, obj1.y0, obj1.y1]), max([obj0.y0, obj0.y1, obj1.y0, obj1.y1])
 
-                if (halign and isinstance(line, LTTextLineHorizontal)) or (
+                for pt_of_line in line_list:
+                    line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
+                    line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
+                    # When objects are placed side by side and there is the line between them.
+                    if objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
+                        separate_by_line = True
+                    # When objects are arranged vertically and there is a line between them.
+                    elif objs_min_y <= line_min_y <= line_max_y <= objs_max_y and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
+                        separate_by_line = True
+                # ==============================================================================
+
+                if not separate_by_line and (halign and isinstance(line, LTTextLineHorizontal)) or (
                     valign and isinstance(line, LTTextLineVertical)
                 ):
 
@@ -791,12 +809,13 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 elif line is not None:
                     yield line
                     line = None
+                    separate_by_line = False  # added by kash.
                 else:
-                    if valign and not halign:
+                    if valign and not halign and not separate_by_line:
                         line = LTTextLineVertical(laparams.word_margin)
                         line.add(obj0)
                         line.add(obj1)
-                    elif halign and not valign:
+                    elif halign and not valign and not separate_by_line:
                         line = LTTextLineHorizontal(laparams.word_margin)
                         line.add(obj0)
                         line.add(obj1)
@@ -805,6 +824,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         line.add(obj0)
                         yield line
                         line = None
+                        separate_by_line = False  # added by kash.
             obj0 = obj1
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
@@ -937,7 +957,33 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         # By now only groups are in the plane
         return list(cast(LTTextGroup, g) for g in plane)
 
-    def analyze(self, laparams: LAParams) -> None:
+    def extract_lines(self) -> list[list[Tuple[float]]]:
+        """For separationg textline with LTChar by LTline, LTRect.
+        This function is added by kash.
+        """
+        (rect_and_line_objs, otherobjs) = fsplit(lambda obj: (isinstance(obj, LTLine) or isinstance(obj, LTRect)), self)
+        # line list will be [[(pt1_x,pt1_y),(pt2_x, pt2_y)], [(pt1_x,pt1_y),(pt2_x, pt2_y)], ...]
+        line_list = []
+        for obj in rect_and_line_objs:
+            obj_type = type(obj)
+            if obj_type == LTLine:
+                assert len(obj.pts) == 2, f"LTLine has {len(obj.pts)} points."
+                line_list.append([obj.pts[0], obj.pts[1]])
+            elif obj_type == LTRect:
+                obj_length = len(obj.pts)
+                assert obj_length == 4, f"LTRect has {obj_length} points."
+                for i, point in enumerate(obj.pts[:-1]):
+                    line_list.append([obj.pts[i], obj.pts[i + 1]])
+                    pass
+                line_list.append([obj.pts[-1], obj.pts[0]])
+            else:
+                assert False, f"type is invalid. type: {type(obj)}"
+        return line_list
+        
+    def analyze(self, laparams: LAParams, lines: Optional[list] = None) -> None:
+        """
+        rect_and_lines is added by kash.
+        """
         # textobjs is a list of LTChar objects, i.e.
         # it has all the individual characters in the page.
         (textobjs, otherobjs) = fsplit(lambda obj: isinstance(obj, LTChar), self)
@@ -945,7 +991,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             obj.analyze(laparams)
         if not textobjs:
             return
-        textlines = list(self.group_objects(laparams, textobjs))
+        textlines = list(self.group_objects(laparams, textobjs, lines))  # added arg rect_and_lines by kash.
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
         for obj in empties:
             obj.analyze(laparams)
