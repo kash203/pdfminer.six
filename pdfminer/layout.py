@@ -122,7 +122,7 @@ class LAParams:
 class LTItem:
     """Interface for things that can be analyzed"""
 
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         """Perform the layout analysis."""
         pass
 
@@ -436,7 +436,7 @@ class LTContainer(LTComponent, Generic[LTItemT]):
             self.add(obj)
         return
 
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         for obj in self._objs:
             obj.analyze(laparams)
         return
@@ -496,7 +496,7 @@ class LTTextLine(LTTextContainer[TextLineElement]):
             self.get_text(),
         )
 
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         for obj in self._objs:
             obj.analyze(laparams)
         LTContainer.add(self, LTAnno("\n"))
@@ -673,7 +673,7 @@ class LTTextBox(LTTextContainer[LTTextLine]):
 
 
 class LTTextBoxHorizontal(LTTextBox):
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         super().analyze(laparams)
         self._objs.sort(key=lambda obj: -obj.y1)
         return
@@ -683,7 +683,7 @@ class LTTextBoxHorizontal(LTTextBox):
 
 
 class LTTextBoxVertical(LTTextBox):
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         super().analyze(laparams)
         self._objs.sort(key=lambda obj: -obj.x1)
         return
@@ -703,7 +703,7 @@ class LTTextGroup(LTTextContainer[TextGroupElement]):
 
 
 class LTTextGroupLRTB(LTTextGroup):
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         super().analyze(laparams)
         assert laparams.boxes_flow is not None
         boxes_flow = laparams.boxes_flow
@@ -716,7 +716,7 @@ class LTTextGroupLRTB(LTTextGroup):
 
 
 class LTTextGroupTBRL(LTTextGroup):
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         super().analyze(laparams)
         assert laparams.boxes_flow is not None
         boxes_flow = laparams.boxes_flow
@@ -996,13 +996,13 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         # it has all the individual characters in the page.
         (textobjs, otherobjs) = fsplit(lambda obj: isinstance(obj, LTChar), self)
         for obj in otherobjs:
-            obj.analyze(laparams)
+            obj.analyze(laparams, lines)
         if not textobjs:
             return
         textlines = list(self.group_objects(laparams, textobjs, lines))  # added arg rect_and_lines by kash.
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
         for obj in empties:
-            obj.analyze(laparams)
+            obj.analyze(laparams, lines)
         textboxes = list(self.group_textlines(laparams, textlines))
         if laparams.boxes_flow is None:
             for textbox in textboxes:
@@ -1055,10 +1055,10 @@ class LTFigure(LTLayoutContainer):
             matrix2str(self.matrix),
         )
 
-    def analyze(self, laparams: LAParams) -> None:
+    def analyze(self, laparams: LAParams, lines=None) -> None:
         if not laparams.all_texts:
             return
-        LTLayoutContainer.analyze(self, laparams)
+        LTLayoutContainer.analyze(self, laparams, lines)
         return
 
 
