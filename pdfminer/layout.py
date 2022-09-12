@@ -796,14 +796,16 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         line_min_x, line_max_x, line_min_y, line_max_y = pt_of_line[:4]
                         # When objects are placed side by side and there is the line between them.
                         if not valign and objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
+                        # if halign and objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
                             separate_by_line = True
                         # When objects are arranged vertically and there is a line between them.
                         elif not halign and objs_min_y <= line_min_y <= line_max_y <= objs_max_y and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
+                        # elif valign and objs_min_y <= line_min_y <= line_max_y <= objs_max_y and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
                             separate_by_line = True
                 # ==============================================================================
 
-                if not separate_by_line and (halign and isinstance(line, LTTextLineHorizontal)) or (
-                    valign and isinstance(line, LTTextLineVertical)
+                if not separate_by_line and ((halign and isinstance(line, LTTextLineHorizontal)) or (
+                    valign and isinstance(line, LTTextLineVertical))
                 ):
 
                     line.add(obj1)
