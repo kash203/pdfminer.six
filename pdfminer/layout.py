@@ -75,6 +75,11 @@ class LAParams:
         layout analysis
     :param all_texts: If layout analysis should be performed on text in
         figures.
+    :param separate_with_border: Adding checking the characters are crossing 
+        between borders when grouping in layout analysis work.
+    :param crossing_ratio: Default 0.0. If the line is little shorter and cause
+        unexpected grouping, line length extend length of line virtually.
+        the value is percentage of the length you want to extend.
     """
 
     def __init__(
@@ -87,6 +92,7 @@ class LAParams:
         detect_vertical: bool = False,
         all_texts: bool = False,
         separate_with_border = False,
+        crossing_ratio = 0.0,
     ) -> None:
         self.line_overlap = line_overlap
         self.char_margin = char_margin
@@ -96,6 +102,7 @@ class LAParams:
         self.detect_vertical = detect_vertical
         self.all_texts = all_texts
         self.separate_with_border = separate_with_border
+        self.crossing_ratio = crossing_ratio
 
         self._validate()
 
@@ -795,12 +802,14 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                     for pt_of_line in line_list:
                         line_min_x, line_max_x, line_min_y, line_max_y = pt_of_line[:4]
                         # When objects are placed side by side and there is the line between them.
-                        if not valign and objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
-                        # if halign and objs_min_x <= line_min_x <= line_max_x <= objs_max_x and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
+                        if not valign \
+                            and objs_min_x <= line_min_x <= line_max_x <= objs_max_x \
+                            and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
                             separate_by_line = True
                         # When objects are arranged vertically and there is a line between them.
-                        elif not halign and objs_min_y <= line_min_y <= line_max_y <= objs_max_y and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
-                        # elif valign and objs_min_y <= line_min_y <= line_max_y <= objs_max_y and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
+                        elif not halign \
+                            and objs_min_y <= line_min_y <= line_max_y <= objs_max_y \
+                            and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
                             separate_by_line = True
                 # ==============================================================================
 
@@ -960,11 +969,20 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         # By now only groups are in the plane
         return list(cast(LTTextGroup, g) for g in plane)
 
-    def extract_lines(self) -> list[list[float]]:
+    def extract_lines(self, laparams: LAParams) -> list[list[float]]:
         """For separationg textline with LTChar by LTline, LTRect.
         This function is added by kash.
         """
-        (rect_and_line_objs, otherobjs) = fsplit(lambda obj: (isinstance(obj, LTLine) or isinstance(obj, LTRect)), self)
+        def extract_line_objs_recursively(layout, outputs_list):
+            if not isinstance(layout, LTContainer) and not isinstance(layout, LTFigure):
+                if type(layout) in [LTLine, LTRect]:
+                    outputs_list.append(layout)
+                return
+
+            for lt_obj in layout:
+                extract_line_objs_recursively(lt_obj, outputs_list)
+        rect_and_line_objs = []
+        extract_line_objs_recursively(self, rect_and_line_objs)
         # line list will be [[(pt1_x,pt1_y),(pt2_x, pt2_y)], [(pt1_x,pt1_y),(pt2_x, pt2_y)], ...]
         line_list = []
         for obj in rect_and_line_objs:
@@ -985,6 +1003,10 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         for pt_of_line in line_list:
             line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
             line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
+            line_margin_x = (line_max_x - line_min_x) * laparams.crossing_ratio
+            line_margin_y = (line_max_y - line_min_y) * laparams.crossing_ratio
+            line_min_x, line_max_x = line_min_x - line_margin_x, line_max_x + line_margin_x
+            line_min_y, line_max_y = line_min_y - line_margin_y, line_max_y + line_margin_y
             result_line_list.append([line_min_x, line_max_x, line_min_y, line_max_y])
         return result_line_list
         
