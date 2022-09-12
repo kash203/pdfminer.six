@@ -788,7 +788,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 
                 # Added by kash ===============================================================
                 # If there are lines between two object areas, objects is regarded as separated.
-                if laparams.separate_with_border:
+                if laparams.separate_with_border and line_list:
                     objs_min_x, objs_max_x = min([obj0.x0, obj0.x1, obj1.x0, obj1.x1]), max([obj0.x0, obj0.x1, obj1.x0, obj1.x1])
                     objs_min_y, objs_max_y = min([obj0.y0, obj0.y1, obj1.y0, obj1.y1]), max([obj0.y0, obj0.y1, obj1.y0, obj1.y1])
 
