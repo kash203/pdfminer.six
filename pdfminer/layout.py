@@ -79,7 +79,7 @@ class LAParams:
         between borders when grouping in layout analysis work.
     :param crossing_ratio: Default 0.0. If the line is little shorter and cause
         unexpected grouping, line length extend length of line virtually.
-        the value is percentage of the length you want to extend.
+        the value is percentage of the length you want to extend (range: 0.00 ~ 1.00).
     """
 
     def __init__(
@@ -747,7 +747,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
     ) -> Iterator[LTTextLine]:
         obj0 = None
         line = None
-        separate_by_line = False  # added by kash.
+        separate_by_line = False
         for obj1 in objs:
             if obj0 is not None:
                 # halign: obj0 and obj1 is horizontally aligned.
@@ -793,7 +793,6 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                     < max(obj0.height, obj1.height) * laparams.char_margin
                 )
                 
-                # Added by kash ===============================================================
                 # If there are lines between two object areas, objects is regarded as separated.
                 if laparams.separate_with_border and line_list:
                     objs_min_x, objs_max_x = min([obj0.x0, obj0.x1, obj1.x0, obj1.x1]), max([obj0.x0, obj0.x1, obj1.x0, obj1.x1])
@@ -811,7 +810,6 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                             and objs_min_y <= line_min_y <= line_max_y <= objs_max_y \
                             and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
                             separate_by_line = True
-                # ==============================================================================
 
                 if not separate_by_line and ((halign and isinstance(line, LTTextLineHorizontal)) or (
                     valign and isinstance(line, LTTextLineVertical))
@@ -821,7 +819,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 elif line is not None:
                     yield line
                     line = None
-                    separate_by_line = False  # added by kash.
+                    separate_by_line = False
                 else:
                     if valign and not halign and not separate_by_line:
                         line = LTTextLineVertical(laparams.word_margin)
@@ -836,7 +834,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         line.add(obj0)
                         yield line
                         line = None
-                        separate_by_line = False  # added by kash.
+                        separate_by_line = False
             obj0 = obj1
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
@@ -970,9 +968,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         return list(cast(LTTextGroup, g) for g in plane)
 
     def extract_lines(self, laparams: LAParams) -> list[list[float]]:
-        """For separationg textline with LTChar by LTline, LTRect.
-        This function is added by kash.
-        """
+        """Extract lines for separationg textline with LTChar by LTline, LTRect."""
         def extract_line_objs_recursively(layout, outputs_list):
             if not isinstance(layout, LTContainer) and not isinstance(layout, LTFigure):
                 if type(layout) in [LTLine, LTRect]:
@@ -983,12 +979,13 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 extract_line_objs_recursively(lt_obj, outputs_list)
         rect_and_line_objs = []
         extract_line_objs_recursively(self, rect_and_line_objs)
-        # line list will be [[(pt1_x,pt1_y),(pt2_x, pt2_y)], [(pt1_x,pt1_y),(pt2_x, pt2_y)], ...]
+
         line_list = []
         for obj in rect_and_line_objs:
             obj_type = type(obj)
             if obj_type == LTLine:
-                assert len(obj.pts) == 2, f"LTLine has {len(obj.pts)} points."
+                obj_length = len(obj.pts)
+                assert len(obj.pts) == 2, f"LTLine has {obj_length} points."
                 line_list.append([obj.pts[0], obj.pts[1]])
             elif obj_type == LTRect:
                 obj_length = len(obj.pts)
@@ -999,10 +996,12 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 line_list.append([obj.pts[-1], obj.pts[0]])
             else:
                 assert False, f"type is invalid. type: {type(obj)}"
+
         result_line_list = []
         for pt_of_line in line_list:
             line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
             line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
+            # Correction for short lines between characters
             line_margin_x = (line_max_x - line_min_x) * laparams.crossing_ratio
             line_margin_y = (line_max_y - line_min_y) * laparams.crossing_ratio
             line_min_x, line_max_x = line_min_x - line_margin_x, line_max_x + line_margin_x
@@ -1011,9 +1010,6 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         return result_line_list
         
     def analyze(self, laparams: LAParams, lines: Optional[list] = None) -> None:
-        """
-        rect_and_lines is added by kash.
-        """
         # textobjs is a list of LTChar objects, i.e.
         # it has all the individual characters in the page.
         (textobjs, otherobjs) = fsplit(lambda obj: isinstance(obj, LTChar), self)
@@ -1021,7 +1017,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             obj.analyze(laparams, lines)
         if not textobjs:
             return
-        textlines = list(self.group_objects(laparams, textobjs, lines))  # added arg rect_and_lines by kash.
+        textlines = list(self.group_objects(laparams, textobjs, lines))
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
         for obj in empties:
             obj.analyze(laparams, lines)
