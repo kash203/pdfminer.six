@@ -77,10 +77,10 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
         if self.laparams is not None:
             if self.laparams.separate_with_border:
-                line_list = self.cur_item.extract_lines(self.laparams)
+                ruled_lines = self.cur_item.extract_ruled_lines(self.laparams)
             else:
-                line_list = None
-            self.cur_item.analyze(self.laparams, line_list)
+                ruled_lines = None
+            self.cur_item.analyze(self.laparams, ruled_lines)
         self.pageno += 1
         self.receive_layout(self.cur_item)
 

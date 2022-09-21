@@ -91,8 +91,8 @@ class LAParams:
         boxes_flow: Optional[float] = 0.5,
         detect_vertical: bool = False,
         all_texts: bool = False,
-        separate_with_border = False,
-        crossing_ratio = 0.0,
+        separate_with_border: bool = False,
+        crossing_ratio: float = 0.0,
     ) -> None:
         self.line_overlap = line_overlap
         self.char_margin = char_margin
@@ -129,7 +129,7 @@ class LAParams:
 class LTItem:
     """Interface for things that can be analyzed"""
 
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         """Perform the layout analysis."""
         pass
 
@@ -443,7 +443,7 @@ class LTContainer(LTComponent, Generic[LTItemT]):
             self.add(obj)
         return
 
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         for obj in self._objs:
             obj.analyze(laparams)
         return
@@ -503,7 +503,7 @@ class LTTextLine(LTTextContainer[TextLineElement]):
             self.get_text(),
         )
 
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         for obj in self._objs:
             obj.analyze(laparams)
         LTContainer.add(self, LTAnno("\n"))
@@ -680,7 +680,7 @@ class LTTextBox(LTTextContainer[LTTextLine]):
 
 
 class LTTextBoxHorizontal(LTTextBox):
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         super().analyze(laparams)
         self._objs.sort(key=lambda obj: -obj.y1)
         return
@@ -690,7 +690,7 @@ class LTTextBoxHorizontal(LTTextBox):
 
 
 class LTTextBoxVertical(LTTextBox):
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         super().analyze(laparams)
         self._objs.sort(key=lambda obj: -obj.x1)
         return
@@ -710,7 +710,7 @@ class LTTextGroup(LTTextContainer[TextGroupElement]):
 
 
 class LTTextGroupLRTB(LTTextGroup):
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         super().analyze(laparams)
         assert laparams.boxes_flow is not None
         boxes_flow = laparams.boxes_flow
@@ -723,7 +723,7 @@ class LTTextGroupLRTB(LTTextGroup):
 
 
 class LTTextGroupTBRL(LTTextGroup):
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         super().analyze(laparams)
         assert laparams.boxes_flow is not None
         boxes_flow = laparams.boxes_flow
@@ -743,7 +743,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
 
     # group_objects: group text object to textlines.
     def group_objects(
-        self, laparams: LAParams, objs: Iterable[LTComponent], line_list: Optional[list[list[float]]] = None
+        self, laparams: LAParams, objs: Iterable[LTComponent], ruled_lines: Optional[list[list[float]]] = None
     ) -> Iterator[LTTextLine]:
         obj0 = None
         line = None
@@ -794,11 +794,11 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 )
                 
                 # If there are lines between two object areas, objects is regarded as separated.
-                if laparams.separate_with_border and line_list:
+                if laparams.separate_with_border and ruled_lines:
                     objs_min_x, objs_max_x = min([obj0.x0, obj0.x1, obj1.x0, obj1.x1]), max([obj0.x0, obj0.x1, obj1.x0, obj1.x1])
                     objs_min_y, objs_max_y = min([obj0.y0, obj0.y1, obj1.y0, obj1.y1]), max([obj0.y0, obj0.y1, obj1.y0, obj1.y1])
 
-                    for pt_of_line in line_list:
+                    for pt_of_line in ruled_lines:
                         line_min_x, line_max_x, line_min_y, line_max_y = pt_of_line[:4]
                         # When objects are placed side by side and there is the line between them.
                         if not valign \
@@ -967,8 +967,8 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         # By now only groups are in the plane
         return list(cast(LTTextGroup, g) for g in plane)
 
-    def extract_lines(self, laparams: LAParams) -> list[list[float]]:
-        """Extract lines for separationg textline with LTChar by LTline, LTRect."""
+    def extract_ruled_lines(self, laparams: LAParams) -> list[list[float]]:
+        """Extract ruled lines for separationg textline with LTChar by LTline, LTRect."""
         def extract_line_objs_recursively(layout, outputs_list):
             if not isinstance(layout, LTContainer) and not isinstance(layout, LTFigure):
                 if type(layout) in [LTLine, LTRect]:
@@ -980,25 +980,24 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         rect_and_line_objs = []
         extract_line_objs_recursively(self, rect_and_line_objs)
 
-        line_list = []
+        ruled_lines = []
         for obj in rect_and_line_objs:
             obj_type = type(obj)
             if obj_type == LTLine:
                 obj_length = len(obj.pts)
                 assert len(obj.pts) == 2, f"LTLine has {obj_length} points."
-                line_list.append([obj.pts[0], obj.pts[1]])
+                ruled_lines.append([obj.pts[0], obj.pts[1]])
             elif obj_type == LTRect:
                 obj_length = len(obj.pts)
                 assert obj_length == 4, f"LTRect has {obj_length} points."
                 for i, point in enumerate(obj.pts[:-1]):
-                    line_list.append([obj.pts[i], obj.pts[i + 1]])
-                    pass
-                line_list.append([obj.pts[-1], obj.pts[0]])
+                    ruled_lines.append([obj.pts[i], obj.pts[i + 1]])
+                ruled_lines.append([obj.pts[-1], obj.pts[0]])
             else:
                 assert False, f"type is invalid. type: {type(obj)}"
 
-        result_line_list = []
-        for pt_of_line in line_list:
+        corrected_ruled_lines = []
+        for pt_of_line in ruled_lines:
             line_max_x, line_min_x = max(pt_of_line[0][0], pt_of_line[1][0]), min(pt_of_line[0][0], pt_of_line[1][0])
             line_max_y, line_min_y = max(pt_of_line[0][1], pt_of_line[1][1]), min(pt_of_line[0][1], pt_of_line[1][1])
             # Correction for short lines between characters
@@ -1006,21 +1005,21 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             line_margin_y = (line_max_y - line_min_y) * laparams.crossing_ratio
             line_min_x, line_max_x = line_min_x - line_margin_x, line_max_x + line_margin_x
             line_min_y, line_max_y = line_min_y - line_margin_y, line_max_y + line_margin_y
-            result_line_list.append([line_min_x, line_max_x, line_min_y, line_max_y])
-        return result_line_list
+            corrected_ruled_lines.append([line_min_x, line_max_x, line_min_y, line_max_y])
+        return corrected_ruled_lines
         
-    def analyze(self, laparams: LAParams, lines: Optional[list] = None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         # textobjs is a list of LTChar objects, i.e.
         # it has all the individual characters in the page.
         (textobjs, otherobjs) = fsplit(lambda obj: isinstance(obj, LTChar), self)
         for obj in otherobjs:
-            obj.analyze(laparams, lines)
+            obj.analyze(laparams, ruled_lines)
         if not textobjs:
             return
-        textlines = list(self.group_objects(laparams, textobjs, lines))
+        textlines = list(self.group_objects(laparams, textobjs, ruled_lines))
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
         for obj in empties:
-            obj.analyze(laparams, lines)
+            obj.analyze(laparams, ruled_lines)
         textboxes = list(self.group_textlines(laparams, textlines))
         if laparams.boxes_flow is None:
             for textbox in textboxes:
@@ -1073,10 +1072,10 @@ class LTFigure(LTLayoutContainer):
             matrix2str(self.matrix),
         )
 
-    def analyze(self, laparams: LAParams, lines=None) -> None:
+    def analyze(self, laparams: LAParams, ruled_lines: Optional[list[list[float]]] = None) -> None:
         if not laparams.all_texts:
             return
-        LTLayoutContainer.analyze(self, laparams, lines)
+        LTLayoutContainer.analyze(self, laparams, ruled_lines)
         return
 
 
