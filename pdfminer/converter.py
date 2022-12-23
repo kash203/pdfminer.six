@@ -142,6 +142,19 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             ]
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
 
+            operators = [str(operation[0]) for operation in path]
+            transformed_points = [
+                [
+                    apply_matrix_pt(self.ctm, (float(operand1), float(operand2)))
+                    for operand1, operand2 in zip(operation[1::2], operation[2::2])
+                ]
+                for operation in path
+            ]
+            transformed_path = [
+                cast(PathSegment, (o, *p))
+                for o, p in zip(operators, transformed_points)
+            ]
+
             if shape in {"mlh", "ml"}:
                 # single line segment
                 #
@@ -156,6 +169,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     evenodd,
                     gstate.scolor,
                     gstate.ncolor,
+                    original_path=transformed_path,
+                    dashing_style=gstate.dash,
                 )
                 self.cur_item.add(line)
 
@@ -175,6 +190,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         evenodd,
                         gstate.scolor,
                         gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
                     )
                     self.cur_item.add(rect)
                 else:
@@ -186,9 +203,10 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         evenodd,
                         gstate.scolor,
                         gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
                     )
                     self.cur_item.add(curve)
-
             else:
                 curve = LTCurve(
                     gstate.linewidth,
@@ -198,6 +216,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     evenodd,
                     gstate.scolor,
                     gstate.ncolor,
+                    transformed_path,
+                    gstate.dash,
                 )
                 self.cur_item.add(curve)
 
