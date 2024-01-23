@@ -80,6 +80,9 @@ class LAParams:
     :param crossing_ratio: Default 0.0. If the line is little shorter and cause
         unexpected grouping, line length extend length of line virtually.
         the value is percentage of the length you want to extend (range: 0.00 ~ 1.00).
+    :param overlap_ratio_between_line_and_chars: Default 0.05. The permissible ratio of overlap between lines and chars.
+        This value is to avoid unnecessary segmentation when text and lines overlap at the edges.
+        the value is percentage of the length you want to extend (range: 0.00 ~ 1.00).
     """
 
     def __init__(
@@ -93,6 +96,7 @@ class LAParams:
         all_texts: bool = False,
         separate_with_border: bool = False,
         crossing_ratio: float = 0.0,
+        overlap_ratio_between_line_and_chars: float = 0.05,
     ) -> None:
         self.line_overlap = line_overlap
         self.char_margin = char_margin
@@ -103,6 +107,7 @@ class LAParams:
         self.all_texts = all_texts
         self.separate_with_border = separate_with_border
         self.crossing_ratio = crossing_ratio
+        self.overlap_ratio_between_line_and_chars = overlap_ratio_between_line_and_chars
 
         self._validate()
 
@@ -816,18 +821,20 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 if laparams.separate_with_border and ruled_lines:
                     objs_min_x, objs_max_x = min([obj0.x0, obj0.x1, obj1.x0, obj1.x1]), max([obj0.x0, obj0.x1, obj1.x0, obj1.x1])
                     objs_min_y, objs_max_y = min([obj0.y0, obj0.y1, obj1.y0, obj1.y1]), max([obj0.y0, obj0.y1, obj1.y0, obj1.y1])
+                    objs_width, objs_height = objs_max_x - objs_min_x, objs_max_y - objs_min_y
+                    correction_length = objs_width * laparams.overlap_ratio_between_line_and_chars
 
                     for pt_of_line in ruled_lines:
                         line_min_x, line_max_x, line_min_y, line_max_y = pt_of_line[:4]
                         # When objects are placed side by side and there is the line between them.
                         if not valign \
-                            and objs_min_x <= line_min_x <= line_max_x <= objs_max_x \
-                            and line_min_y <= objs_min_y <= objs_max_y <= line_max_y:
+                            and objs_min_x + correction_length < line_min_x <= line_max_x < objs_max_x - correction_length \
+                            and line_min_y < objs_min_y <= objs_max_y < line_max_y:
                             separate_by_line = True
                         # When objects are arranged vertically and there is a line between them.
                         elif not halign \
-                            and objs_min_y <= line_min_y <= line_max_y <= objs_max_y \
-                            and line_min_x <= objs_min_x <= objs_max_x <= line_max_x:
+                            and objs_min_y < line_min_y <= line_max_y < objs_max_y \
+                            and line_min_x < objs_min_x <= objs_max_x < line_max_x:
                             separate_by_line = True
 
                 if not separate_by_line and ((halign and isinstance(line, LTTextLineHorizontal)) or (
